@@ -12,10 +12,13 @@ describe("示意圖相容的歷史資料表格", () => {
   it("以固定欄位順序呈現開牌、十八項公式、下一局預測與命中數", () => {
     render(<DetailedHistoryResults items={[makeRow(6, "莊"), makeRow(5, "閒")]} loading={false} />);
     const table = screen.getByLabelText("歷史資料公式預測表");
+    expect(screen.queryByText("FORMULA HISTORY")).toBeNull();
+    expect(screen.queryByText("歷史資料結果")).toBeNull();
     expect(within(table).getByText("局數")).toBeTruthy();
     expect(within(table).getByText("閒1")).toBeTruthy();
     expect(within(table).getByText("莊3")).toBeTruthy();
-    formulaNames.forEach(name => expect(within(table).getAllByText(name).length).toBeGreaterThan(0));
+    formulaNames.forEach(name => expect(within(table).queryByText(name)).toBeNull());
+    formulaNames.forEach((_, index) => expect(within(table).getByText(`公式${index + 1}`)).toBeTruthy());
     expect(within(table).getByText(/下一局 · 第 7 局預測/)).toBeTruthy();
     expect(screen.getByTestId("next-prediction-row").textContent).toContain("僅預測，不計入命中");
     expect(within(table).getByText("已完成局數命中")).toBeTruthy();
