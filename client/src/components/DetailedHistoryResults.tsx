@@ -51,11 +51,18 @@ function predictionTextClass(value: Prediction) {
   return "text-[#203044]";
 }
 
-function predictionCellClass(value: Prediction) {
+function historicalPredictionCellClass(value: Prediction) {
   if (value === "莊") return "bg-[#F10B0B] text-white";
   if (value === "閒") return "bg-white text-[#0057FF]";
   if (value === "和") return "bg-[#F6F8FA] text-[#203044]";
   return "bg-white text-slate-300";
+}
+
+function nextPredictionCellClass(value: Prediction) {
+  if (value === "閒") return "bg-[#F9FBFD] text-[#0057FF]";
+  if (value === "莊") return "bg-[#F9FBFD] text-[#E00000]";
+  if (value === "和") return "bg-[#F9FBFD] text-[#203044]";
+  return "bg-[#F9FBFD] text-slate-300";
 }
 
 function CustomFormulaSection({ formulas }: { formulas: CustomFormulaPreview[] }) {
@@ -67,7 +74,8 @@ function FormulaCell({ formula, kind }: { formula?: DetailedFormula; kind: "hist
   const prediction = kind === "history" ? formula?.previousPrediction ?? "" : formula?.nextPrediction ?? "";
   const value = formula?.value ?? "—";
   const label = kind === "history" ? `${formula?.name ?? "公式"}：${prediction || "—"}；運算值 ${value}` : `${formula?.name ?? "公式"}：下一局預測 ${prediction || "—"}；運算值 ${value}`;
-  return <td className={`min-w-10 border border-[#212121] px-1 py-0.5 text-center text-xs font-bold leading-4 ${predictionCellClass(prediction)}`} title={label}>{prediction || "—"}</td>;
+  const className = kind === "history" ? historicalPredictionCellClass(prediction) : nextPredictionCellClass(prediction);
+  return <td data-testid={kind === "next" ? "next-prediction-cell" : undefined} className={`min-w-10 border border-[#212121] px-1 py-0.5 text-center text-xs font-bold leading-4 ${className}`} title={label}>{prediction || "—"}</td>;
 }
 
 export function DetailedHistoryResults({ items, loading, customFormulas = [] }: { items: DetailedHistoryRow[]; loading: boolean; customFormulas?: CustomFormulaPreview[] }) {
@@ -77,8 +85,9 @@ export function DetailedHistoryResults({ items, loading, customFormulas = [] }: 
   const chronological = [...items].reverse();
   const displayRows = chronological.slice(-HISTORY_VISIBLE_ROWS);
   const latest = chronological.at(-1)!;
-  const formulaHits = Object.fromEntries(FORMULA_ORDER.map(name => [name, chronological.reduce((total, row) => total + (row.formulas.find(formula => formula.name === name)?.status === "hit" ? 1 : 0), 0)]));
+  // 僅使用已完成的歷史局數累積命中；下一局預測列不參與此統計。
+  const historicalFormulaHits = Object.fromEntries(FORMULA_ORDER.map(name => [name, chronological.reduce((total, row) => total + (row.formulas.find(formula => formula.name === name)?.status === "hit" ? 1 : 0), 0)]));
   const rowFormula = (row: DetailedHistoryRow, name: string) => row.formulas.find(formula => formula.name === name);
 
-  return <section className="mt-5" data-testid="detailed-history-results"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500">橫向捲動可查看全部十八項 Formula.py 公式；紅底為莊預測，藍字為閒預測。</p><p className="text-xs font-semibold text-[#6B7A90]">顯示最近 {displayRows.length} 局</p></div><div className="overflow-x-auto rounded-lg border border-[#212121] bg-white shadow-[0_3px_12px_rgba(21,36,59,0.05)]"><table className="min-w-[1880px] border-collapse text-sm" aria-label="歷史資料公式預測表"><thead><tr className="bg-[#F8F8F8] text-[#172235]">{["局數", "閒1", "閒2", "閒3", "莊1", "莊2", "莊3", "閒點", "莊點", "結果", ...FORMULA_ORDER].map(name => <th key={name} className="min-w-10 border border-[#212121] px-1 py-1 text-center text-xs font-bold whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{displayRows.map(row => <tr key={row.id ?? row.roundNo} className="bg-white"><td className="border border-[#212121] px-1 py-0.5 text-center font-semibold text-[#15243B]">{row.roundNo}</td>{[0, 1, 2].map(index => <td key={`p-${index}`} className="min-w-11 border border-[#212121] px-1 py-0.5 text-center italic">{cardLabel(row.playerCards[index])}</td>)}{[0, 1, 2].map(index => <td key={`b-${index}`} className="min-w-11 border border-[#212121] px-1 py-0.5 text-center italic">{cardLabel(row.bankerCards[index])}</td>)}<td className="border border-[#212121] px-1 py-0.5 text-center">{row.playerPoint}</td><td className="border border-[#212121] px-1 py-0.5 text-center">{row.bankerPoint}</td><td className={`border border-[#212121] px-1 py-0.5 text-center font-bold ${predictionTextClass(row.winner)}`}>{row.winner}</td>{FORMULA_ORDER.map(name => <FormulaCell key={name} formula={rowFormula(row, name)} kind="history" />)}</tr>)}<tr className="bg-[#F9FBFD]"><td colSpan={10} className="border border-[#212121] px-2 py-1 text-left font-bold text-[#15243B]">下一局 · 第 {latest.roundNo + 1} 局預測</td>{FORMULA_ORDER.map(name => <FormulaCell key={name} formula={rowFormula(latest, name)} kind="next" />)}</tr><tr className="bg-[#F8F8F8]"><td colSpan={10} className="border border-[#212121] px-2 py-1 text-left text-xs font-bold text-[#45546A]">公式命中數</td>{FORMULA_ORDER.map(name => <td key={name} className="border border-[#212121] px-1 py-1 text-center text-xs font-bold text-[#15243B]">{formulaHits[name]}</td>)}</tr></tbody></table></div><CustomFormulaSection formulas={customFormulas} /></section>;
+  return <section className="mt-5" data-testid="detailed-history-results"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500">橫向捲動可查看全部十八項 Formula.py 公式；紅底為莊預測，藍字為閒預測。</p><p className="text-xs font-semibold text-[#6B7A90]">顯示最近 {displayRows.length} 局</p></div><div className="overflow-x-auto rounded-lg border border-[#212121] bg-white shadow-[0_3px_12px_rgba(21,36,59,0.05)]"><table className="min-w-[1880px] border-collapse text-sm" aria-label="歷史資料公式預測表"><thead><tr className="bg-[#F8F8F8] text-[#172235]">{["局數", "閒1", "閒2", "閒3", "莊1", "莊2", "莊3", "閒點", "莊點", "結果", ...FORMULA_ORDER].map(name => <th key={name} className="min-w-10 border border-[#212121] px-1 py-1 text-center text-xs font-bold whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{displayRows.map(row => <tr key={row.id ?? row.roundNo} className="bg-white"><td className="border border-[#212121] px-1 py-0.5 text-center font-semibold text-[#15243B]">{row.roundNo}</td>{[0, 1, 2].map(index => <td key={`p-${index}`} className="min-w-11 border border-[#212121] px-1 py-0.5 text-center italic">{cardLabel(row.playerCards[index])}</td>)}{[0, 1, 2].map(index => <td key={`b-${index}`} className="min-w-11 border border-[#212121] px-1 py-0.5 text-center italic">{cardLabel(row.bankerCards[index])}</td>)}<td className="border border-[#212121] px-1 py-0.5 text-center">{row.playerPoint}</td><td className="border border-[#212121] px-1 py-0.5 text-center">{row.bankerPoint}</td><td className={`border border-[#212121] px-1 py-0.5 text-center font-bold ${predictionTextClass(row.winner)}`}>{row.winner}</td>{FORMULA_ORDER.map(name => <FormulaCell key={name} formula={rowFormula(row, name)} kind="history" />)}</tr>)}<tr data-testid="next-prediction-row" className="bg-[#F9FBFD]"><td colSpan={10} className="border border-[#212121] px-2 py-1 text-left font-bold text-[#15243B]">下一局 · 第 {latest.roundNo + 1} 局預測<span className="ml-2 text-[11px] font-medium text-slate-400">（僅預測，不計入命中）</span></td>{FORMULA_ORDER.map(name => <FormulaCell key={name} formula={rowFormula(latest, name)} kind="next" />)}</tr><tr data-testid="historical-hit-row" className="bg-[#F8F8F8]"><td colSpan={10} className="border border-[#212121] px-2 py-1 text-left text-xs font-bold text-[#45546A]">已完成局數命中</td>{FORMULA_ORDER.map(name => <td key={name} className="border border-[#212121] px-1 py-1 text-center text-xs font-bold text-[#15243B]">{historicalFormulaHits[name]}</td>)}</tr></tbody></table></div><CustomFormulaSection formulas={customFormulas} /></section>;
 }
