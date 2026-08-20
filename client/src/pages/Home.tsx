@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Database, ShieldCheck, TableProperties } from "lucide-react";
+import { ArrowRight, Database, TableProperties } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -53,7 +53,7 @@ export default function Home() {
   };
 
   return <div className="mx-auto max-w-[1080px]">
-    <AppHeader eyebrow="TABLE SETUP" title="桌局設定" description="先確認桌號與目前閒、莊、和局數；確認後才會進入本局牌面與公式分析。" action={<div className="flex flex-wrap items-center justify-end gap-2"><Badge className="w-fit rounded-full border border-[#E8D9B5] bg-[#FFF9EB] px-3 py-1.5 text-[#94702B] hover:bg-[#FFF9EB]">資料庫連線模式</Badge><Button variant="outline" size="sm" className="border-[#DCE4EE] bg-white text-[#344156]" onClick={() => navigate("/admin/login")}><ShieldCheck className="size-4" />後台管理</Button></div>} />
+    <AppHeader eyebrow="TABLE SETUP" title="桌局設定" description="先確認桌號與目前閒、莊、和局數；確認後才會進入本局牌面與公式分析。" action={<Badge className="w-fit rounded-full border border-[#E8D9B5] bg-[#FFF9EB] px-3 py-1.5 text-[#94702B] hover:bg-[#FFF9EB]">資料庫連線模式</Badge>} />
     <Card className="overflow-hidden rounded-2xl border-[#E7EAF0] bg-white shadow-[0_12px_36px_rgba(21,36,59,0.06)]"><CardContent className="p-6 sm:p-9"><div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]"><div><div className="flex items-start gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#15243B] text-white"><TableProperties className="size-5" /></div><div><p className="text-xs font-semibold tracking-[0.15em] text-[#A27C2E]">STEP 01</p><h2 className="mt-1 font-serif text-2xl font-semibold text-[#15243B]">輸入本桌初始紀錄</h2><p className="mt-2 text-sm leading-6 text-slate-500">局數會作為分析頁第一局的起點；後續每一局將由系統依牌面結果自動更新。</p></div></div><div className="mt-8 grid gap-4 sm:grid-cols-2"><SetupField label="桌號" value={tableId} onChange={value => setTableId(value.toUpperCase())} placeholder="例如 A01" /><SetupField label="閒勝" value={playerWins} type="number" onChange={setPlayerWins} /><SetupField label="莊勝" value={bankerWins} type="number" onChange={setBankerWins} /><SetupField label="和局" value={tieCount} type="number" onChange={setTieCount} /></div><div className="mt-8 flex flex-col gap-3 border-t border-[#EEF0F4] pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">設定完成後，將前往本局牌面輸入與預測頁面。</p><Button className="bg-[#15243B] text-white hover:bg-[#213856]" onClick={beginAnalysis}><ArrowRight className="size-4" />確認並進入分析</Button></div></div><div className="rounded-2xl border border-[#E6D9B9] bg-[#FFFCF4] p-6"><Database className="size-5 text-[#A27C2E]" /><p className="mt-5 text-xs font-bold tracking-[0.15em] text-[#A27C2E]">WORKFLOW</p><ol className="mt-3 space-y-3 text-sm leading-6 text-[#506078]"><li><b className="mr-2 text-[#15243B]">01</b>確認桌局初始數據</li><li><b className="mr-2 text-[#15243B]">02</b>輸入閒、莊牌面</li><li><b className="mr-2 text-[#15243B]">03</b>查看公式預測與歷程</li></ol></div></div></CardContent></Card>
   </div>;
 }

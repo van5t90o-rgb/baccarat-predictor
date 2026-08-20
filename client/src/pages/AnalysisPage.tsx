@@ -20,7 +20,16 @@ type RouterOutput = inferRouterOutputs<AppRouter>;
 type CalculationResponse = RouterOutput["baccarat"]["formulas"]["calculateAndStore"];
 
 function previewCards(values: string[]) {
-  const cards = values.map(value => cardMap[value.trim().toUpperCase()]).filter((value): value is number => typeof value === "number");
+  const cards = values.map(value => {
+    const normalized = value.trim().toUpperCase();
+    const namedValue = cardMap[normalized];
+    if (typeof namedValue === "number") return namedValue;
+    if (/^\d+$/.test(normalized)) {
+      const numericValue = Number(normalized);
+      return numericValue >= 1 && numericValue <= 13 ? numericValue : undefined;
+    }
+    return undefined;
+  }).filter((value): value is number => typeof value === "number");
   return { cards, point: cards.reduce((sum, card) => sum + (baccaratMap[card] ?? 0), 0) % 10 };
 }
 
@@ -105,7 +114,7 @@ export default function AnalysisPage() {
     <SupplementPanel missingRound={missingRound} currentRound={currentRound} playerPair={playerPair} bankerPair={bankerPair} onPlayerPair={setPlayerPair} onBankerPair={setBankerPair} disabled={supplement.isPending} onSubmit={winner => supplement.mutate({ tableId, ...counts, winner, playerPair, bankerPair })} />
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(350px,0.75fr)]">
       <Card className="rounded-2xl border-[#E7EAF0] bg-white shadow-[0_8px_28px_rgba(21,36,59,0.045)]"><CardContent className="p-5 sm:p-6"><div className="mb-6 flex items-start justify-between"><div><p className="text-xs font-semibold tracking-[0.15em] text-[#A27C2E]">CARD INPUT</p><h2 className="mt-1 font-serif text-2xl font-semibold text-[#15243B]">輸入閒／莊牌面</h2></div><Dices className="size-5 text-[#A27C2E]" /></div><div className="grid gap-4 lg:grid-cols-2"><CardHand title="閒" cards={playerCards} point={preview.player.point} onChange={(index, value) => updateCard("player", index, value)} tone="blue" /><CardHand title="莊" cards={bankerCards} point={preview.banker.point} onChange={(index, value) => updateCard("banker", index, value)} tone="red" /></div><div className="mt-6 flex flex-col justify-between gap-3 rounded-xl border border-[#E8EBF0] bg-[#FAFBFC] p-4 sm:flex-row sm:items-center"><div className="flex items-center gap-3"><span className="text-sm text-slate-500">即時計算結果</span><Prediction value={liveWinner} /></div><div className="flex gap-2"><Button variant="outline" className="border-[#E2E7EE] bg-white" onClick={resetCards}><RotateCcw className="size-4" />重設牌面</Button><Button className="bg-[#15243B] text-white hover:bg-[#213856]" onClick={() => calculate.mutate({ tableId, ...counts, playerCards, bankerCards })} disabled={calculate.isPending}><Play className="size-4" />{calculate.isPending ? "計算中" : "確認並儲存"}</Button></div></div></CardContent></Card>
-      <div className="space-y-5"><BestFormula result={result} /><EventWarning result={result} /></div>
+      <PredictionAndEvent result={result} />
     </div>
     <Card className="mt-5 rounded-2xl border-[#E7EAF0] bg-white shadow-[0_8px_28px_rgba(21,36,59,0.045)]"><CardContent className="p-5 sm:p-6"><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold tracking-[0.15em] text-[#A27C2E]">FORMULA RESULTS</p><h2 className="mt-1 font-serif text-2xl font-semibold text-[#15243B]">歷史資料</h2></div><Button variant="outline" size="sm" className="border-[#E2E7EE] bg-white" onClick={() => setHistoryOpen(open => !open)}>{historyOpen ? "收合" : "展開"}<ChevronDown className={`size-4 transition-transform ${historyOpen ? "rotate-180" : ""}`} /></Button></div>{historyOpen && <DetailedHistoryResults items={(historyDetails.data?.items ?? []) as DetailedHistoryRow[]} loading={historyDetails.isLoading} customFormulas={(result?.customFormulas ?? []) as CustomFormulaPreview[]} />}</CardContent></Card>
   </div>;
@@ -125,12 +134,8 @@ function CardHand({ title, cards, point, onChange, tone }: { title: string; card
   return <div className={`rounded-2xl border p-5 ${tone === "blue" ? "border-[#D8E9F8] bg-[#F8FBFF]" : "border-[#F3DADA] bg-[#FFF9F9]"}`}><div className="flex items-center justify-between"><h3 className={`font-serif text-xl font-semibold ${tone === "blue" ? "text-[#1C69B3]" : "text-[#B64A4A]"}`}>{title}</h3><span className="font-serif text-3xl font-bold text-[#15243B]">{cards.filter(Boolean).length ? point : "—"}<span className="ml-1 text-xs font-medium text-slate-400">點</span></span></div><div className="mt-5 grid grid-cols-3 gap-2">{cards.map((card, index) => <Input key={`${title}-${index}`} value={card} maxLength={2} placeholder={`牌 ${index + 1}`} onChange={event => onChange(index, event.target.value)} className="h-11 border-white bg-white text-center font-bold uppercase shadow-sm focus-visible:ring-[#C9A355]" />)}</div></div>;
 }
 
-function BestFormula({ result }: { result: CalculationResponse | null }) {
-  return <Card className="rounded-2xl border-[#E7EAF0] bg-white shadow-[0_8px_28px_rgba(21,36,59,0.045)]"><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold tracking-[0.15em] text-[#A27C2E]">BEST FORMULA</p><h2 className="mt-1 font-serif text-2xl font-semibold text-[#15243B]">最佳公式預測</h2></div><Trophy className="size-5 text-[#C9A355]" /></div>{result ? <div className="mt-7"><Prediction value={result.best.decision} large /><p className="mt-5 text-sm font-bold text-[#15243B]">最佳公式：{result.best.bestFormula || "無法決定"}{result.best.reversed ? "（反打）" : ""}</p><p className="mt-2 text-xs leading-5 text-slate-500">{result.best.reason}</p><div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500"><span>分析局數 {result.best.analysisTotal}</span><span>命中 {result.best.hits}</span><span>命中率 {result.best.accuracy}%</span></div></div> : <Empty text="完成本局確認後，將依歷程提供最佳公式預測。" />}</CardContent></Card>;
-}
-
-function EventWarning({ result }: { result: CalculationResponse | null }) {
-  return <Card className="rounded-2xl border-[#E7EAF0] bg-white shadow-[0_8px_28px_rgba(21,36,59,0.045)]"><CardContent className="p-6"><div className="flex items-center gap-2"><AlertTriangle className="size-4 text-[#C38A35]" /><h2 className="font-serif text-xl font-semibold text-[#15243B]">事件預警</h2></div>{result?.event.matched ? <div className="mt-4 rounded-xl border border-[#F1DEB8] bg-[#FFFAED] p-4 text-sm font-semibold text-[#8B6522]">偵測到事件：{result.event.events.join("、")}</div> : <p className="mt-4 text-sm text-slate-500">{result ? "目前沒有符合的歷史事件模式。" : "確認本局後會依上一局六項公式進行比對。"}</p>}</CardContent></Card>;
+function PredictionAndEvent({ result }: { result: CalculationResponse | null }) {
+  return <Card className="rounded-2xl border-[#E7EAF0] bg-white shadow-[0_8px_28px_rgba(21,36,59,0.045)]"><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold tracking-[0.15em] text-[#A27C2E]">FORMULA & EVENT</p><h2 className="mt-1 font-serif text-2xl font-semibold text-[#15243B]">最佳公式預測與事件預警</h2></div><div className="flex items-center gap-2"><Trophy className="size-5 text-[#C9A355]" /><AlertTriangle className="size-4 text-[#C38A35]" /></div></div>{result ? <div className="mt-7"><Prediction value={result.best.decision} large /><p className="mt-5 text-sm font-bold text-[#15243B]">最佳公式：{result.best.bestFormula || "無法決定"}{result.best.reversed ? "（反打）" : ""}</p><p className="mt-2 text-xs leading-5 text-slate-500">{result.best.reason}</p><div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500"><span>分析局數 {result.best.analysisTotal}</span><span>命中 {result.best.hits}</span><span>命中率 {result.best.accuracy}%</span></div><div className="mt-5 border-t border-[#EEF0F4] pt-4"><p className="flex items-center gap-2 text-sm font-semibold text-[#15243B]"><AlertTriangle className="size-4 text-[#C38A35]" />事件預警</p>{result.event.matched ? <div className="mt-3 rounded-xl border border-[#F1DEB8] bg-[#FFFAED] p-4 text-sm font-semibold text-[#8B6522]">偵測到事件：{result.event.events.join("、")}</div> : <p className="mt-3 text-sm text-slate-500">目前沒有符合的歷史事件模式。</p>}</div></div> : <Empty text="完成本局確認後，將依歷程提供最佳公式預測與事件比對。" />}</CardContent></Card>;
 }
 
 function Empty({ text }: { text: string }) {
