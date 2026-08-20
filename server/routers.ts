@@ -2,11 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { z } from "zod";
 import { ADMIN_SESSION_COOKIE, adminCookieOptions, authenticateAdmin, changeAdminPassword, issueAdminSession } from "./adminAuth";
-import { deleteAdminEvent, deleteAdminFormulaRecord, listAdminEvents, listAdminFormulaRecords } from "./db";
+import { deleteAdminEvent, deleteAdminFormulaRecord, getPublicWorkspaceUser, listAdminEvents, listAdminFormulaRecords } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
-import { baccaratRouter } from "./routers/baccarat";
+import { baccaratRouter, exportCsvData, importCsvData } from "./routers/baccarat";
 
 const storageListInput = z.object({
   page: z.number().int().min(1).default(1),
@@ -52,6 +52,8 @@ export const appRouter = router({
       eventList: adminProcedure.input(storageListInput).query(({ input }) => listAdminEvents(input)),
       removeFormula: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input }) => { await deleteAdminFormulaRecord(input.id); return { success: true } as const; }),
       removeEvent: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input }) => { await deleteAdminEvent(input.id); return { success: true } as const; }),
+      exportData: adminProcedure.query(async () => exportCsvData((await getPublicWorkspaceUser()).id)),
+      importData: adminProcedure.input(z.object({ type: z.enum(["formula", "event"]), csv: z.string().min(1).max(2_000_000) })).mutation(async ({ input }) => importCsvData((await getPublicWorkspaceUser()).id, input)),
     }),
   }),
   baccarat: baccaratRouter,
