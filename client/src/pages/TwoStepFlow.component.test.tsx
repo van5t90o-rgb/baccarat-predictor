@@ -84,24 +84,28 @@ describe("桌局設定與分析頁流程", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/");
   });
 
-  it("確認本局後顯示 Formula.py 相容的最佳公式、反打、事件預警與歷程結果", () => {
+  it("確認本局後只顯示下一局預測與符合的事件預警，並隱藏補齊和冗餘分析文字", () => {
     window.history.pushState({}, "", "/analysis?table=A01&playerWins=3&bankerWins=2&tieCount=0");
     render(<AnalysisPage />);
     const cards = screen.getAllByPlaceholderText(/牌 [1-3]/);
     ["4", "5", "", "A", "8", ""].forEach((value, index) => fireEvent.change(cards[index], { target: { value } }));
     fireEvent.click(screen.getByText("確認並儲存"));
     expect(mocks.calculateMutate).toHaveBeenCalledWith(expect.objectContaining({ tableId: "A01", playerWins: 3, bankerWins: 2, tieCount: 0, playerCards: ["4", "5", ""], bankerCards: ["A", "8", ""] }));
-    expect(screen.getByText("最佳公式：VP（反打）")).toBeTruthy();
-    expect(screen.getByText("唯一最高連續")).toBeTruthy();
-    expect(screen.getByText("分析局數 5")).toBeTruthy();
+    expect(screen.getAllByText("閒").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/依 app\.py 流程輸入閒、莊牌面/)).toBeNull();
+    expect(screen.queryByText("補齊歷史資料")).toBeNull();
+    expect(screen.queryByText("最佳公式：VP（反打）")).toBeNull();
+    expect(screen.queryByText("唯一最高連續")).toBeNull();
+    expect(screen.queryByText("分析局數 5")).toBeNull();
+    expect(screen.queryByText("目前沒有符合的歷史事件模式。")).toBeNull();
     expect(screen.getByText("偵測到事件：莊6")).toBeTruthy();
     expect(screen.getByText("本局自訂公式預測")).toBeTruthy();
     expect(screen.getByText("閒點加權")).toBeTruthy();
     expect(screen.getByText("歷史資料")).toBeTruthy();
-    expect(screen.getAllByText("VP").length).toBeGreaterThan(1);
-    expect(screen.getByText("第 6 局")).toBeTruthy();
-    expect(screen.getByText("下一局預測 · 第 7 局")).toBeTruthy();
-    expect(screen.getByText("公式命中數")).toBeTruthy();
+    expect(screen.getAllByText("公式1").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("歷史資料公式預測表")).toBeTruthy();
+    expect(screen.getByText(/下一局 · 第 7 局預測/)).toBeTruthy();
+    expect(screen.getByText("已完成局數命中")).toBeTruthy();
     expect(screen.queryByText("歷史資料表格")).toBeNull();
   });
 });
