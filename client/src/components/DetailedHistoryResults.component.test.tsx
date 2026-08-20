@@ -16,8 +16,12 @@ describe("示意圖相容的歷史資料表格", () => {
     expect(within(table).getByText("閒1")).toBeTruthy();
     expect(within(table).getByText("莊3")).toBeTruthy();
     formulaNames.forEach(name => expect(within(table).getAllByText(name).length).toBeGreaterThan(0));
-    expect(within(table).getByText("下一局 · 第 7 局預測")).toBeTruthy();
-    expect(within(table).getByText("公式命中數")).toBeTruthy();
+    expect(within(table).getByText(/下一局 · 第 7 局預測/)).toBeTruthy();
+    expect(screen.getByTestId("next-prediction-row").textContent).toContain("僅預測，不計入命中");
+    expect(within(table).getByText("已完成局數命中")).toBeTruthy();
+    const nextCell = screen.getAllByTestId("next-prediction-cell")[0];
+    expect(nextCell?.className).toContain("bg-[#F9FBFD]");
+    expect(nextCell?.className).not.toContain("bg-[#F10B0B]");
     expect(within(table).getAllByText("A").length).toBeGreaterThan(0);
     expect(within(table).getAllByText("J").length).toBeGreaterThan(0);
     expect(within(table).getAllByText("莊")[1]?.className).toContain("bg-[#F10B0B]");

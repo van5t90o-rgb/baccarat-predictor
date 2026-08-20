@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 const navigation = [
+  { path: "/admin", label: "管理首頁", icon: LayoutDashboard },
   { path: "/admin/storage", label: "儲存空間", icon: Archive },
   { path: "/admin/security", label: "帳號與密碼", icon: KeyRound },
 ];
