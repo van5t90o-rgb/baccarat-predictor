@@ -134,6 +134,76 @@ function csvContent(headers: readonly string[], rows: CsvRow[]) {
   return [headers.join(","), ...rows.map(row => headers.map(header => csvCell(row[header])).join(","))].join("\r\n");
 }
 
+export async function exportCsvData(userId: number) {
+  const [formulas, events] = await Promise.all([db.listAllFormulaRecords(userId), db.listAllEvents(userId)]);
+  const formulaRows = formulas.map(row => ({
+    table_id: row.tableId,
+    round_no: String(row.roundNo),
+    player_wins: String(row.playerWins),
+    banker_wins: String(row.bankerWins),
+    tie_count: String(row.tieCount),
+    player_cards: JSON.stringify(row.playerCards),
+    banker_cards: JSON.stringify(row.bankerCards),
+    player_point: String(row.playerPoint),
+    banker_point: String(row.bankerPoint),
+    winner: row.winner,
+    formulas: JSON.stringify(row.formulas),
+  }));
+  const eventRows = events.map(row => ({
+    event_name: row.eventName,
+    table_id: row.tableId,
+    round_no: String(row.roundNo),
+    點差: row.點差,
+    理數: row.理數,
+    導數: row.導數,
+    真數: row.真數,
+    HZ: row.HZ,
+    價值: row.價值,
+  }));
+  return { formulaCsv: `\uFEFF${csvContent(formulaColumns, formulaRows)}`, eventCsv: `\uFEFF${csvContent(eventColumns, eventRows)}`, formulaCount: formulaRows.length, eventCount: eventRows.length };
+}
+
+export async function importCsvData(userId: number, input: { type: "formula" | "event"; csv: string }) {
+  const rows = csvRows(input.csv);
+  let imported = 0;
+  let skipped = 0;
+  if (input.type === "formula") {
+    for (const row of rows) {
+      requireColumns(row, formulaColumns);
+      const tableId = row.table_id.trim().toUpperCase();
+      const roundNo = asNonNegativeInt(row.round_no, "round_no");
+      if (!tableId || roundNo < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "table_id 與 round_no 必須為有效值。" });
+      if (await db.getFormulaByRound(userId, tableId, roundNo)) { skipped += 1; continue; }
+      const playerCards = parseNumberCards(row.player_cards, "player_cards");
+      const bankerCards = parseNumberCards(row.banker_cards, "banker_cards");
+      await db.insertFormulaRecord({
+        userId, tableId, roundNo,
+        playerWins: asNonNegativeInt(row.player_wins, "player_wins"),
+        bankerWins: asNonNegativeInt(row.banker_wins, "banker_wins"),
+        tieCount: asNonNegativeInt(row.tie_count, "tie_count"),
+        playerCards, bankerCards,
+        playerPoint: asNonNegativeInt(row.player_point, "player_point"),
+        bankerPoint: asNonNegativeInt(row.banker_point, "banker_point"),
+        winner: normalizePrediction(row.winner),
+        playerPair: isPair(playerCards), bankerPair: isPair(bankerCards), formulas: parseFormulas(row.formulas),
+      });
+      imported += 1;
+    }
+  } else {
+    for (const row of rows) {
+      requireColumns(row, eventColumns);
+      const tableId = row.table_id.trim().toUpperCase();
+      const eventName = row.event_name.trim();
+      const pattern = Object.fromEntries(EVENT_FORMULAS.map(name => [name, row[name].trim()])) as Record<(typeof EVENT_FORMULAS)[number], "閒" | "莊" | "和" | "">;
+      if (!tableId || !eventName || EVENT_FORMULAS.some(name => !pattern[name])) throw new TRPCError({ code: "BAD_REQUEST", message: "事件 CSV 的桌號、事件名稱與六項公式皆不得為空白。" });
+      if (await db.eventExists(userId, eventName, pattern)) { skipped += 1; continue; }
+      await db.insertEventRecord({ userId, eventName, tableId, roundNo: asNonNegativeInt(row.round_no, "round_no"), ...pattern });
+      imported += 1;
+    }
+  }
+  return { imported, skipped };
+}
+
 function calculateNextRecord(input: z.infer<typeof recordInput>, previous: Awaited<ReturnType<typeof db.getLastFormula>>) {
   const playerCards = parseCards(input.playerCards);
   const bankerCards = parseCards(input.bankerCards);
@@ -225,22 +295,16 @@ export function buildDetailedHistory(history: Awaited<ReturnType<typeof db.listF
   }
   return history.map((row, index) => {
     const previous = history[index - 1] ?? null;
-    const results = calculateFormulas({
-      ...row,
-      playerPair: Boolean(row.playerPair),
-      bankerPair: Boolean(row.bankerPair),
-      previous,
-    });
     const actualWinner = normalizePrediction(row.winner);
     const formulas = FORMULA_NAMES.map(name => {
       const previousPrediction = normalizePrediction(previous?.formulas?.[name]);
-      const current = results[name];
+      const nextPrediction = normalizePrediction(row.formulas?.[name]);
       return {
         name,
-        value: current.value,
-        nextPrediction: current.prediction,
-        success: current.success,
-        error: current.error,
+        value: null,
+        nextPrediction,
+        success: nextPrediction !== "",
+        error: nextPrediction ? "" : "無已保存預測",
         previousPrediction,
         status: statusByRound[index]?.get(name) ?? "pending" as const,
       };
@@ -419,84 +483,7 @@ export const baccaratRouter = router({
     }),
   }),
   csv: router({
-    exportData: protectedProcedure.query(async ({ ctx }) => {
-      const [formulas, events] = await Promise.all([db.listAllFormulaRecords(ctx.user.id), db.listAllEvents(ctx.user.id)]);
-      const formulaRows = formulas.map(row => ({
-        table_id: row.tableId,
-        round_no: String(row.roundNo),
-        player_wins: String(row.playerWins),
-        banker_wins: String(row.bankerWins),
-        tie_count: String(row.tieCount),
-        player_cards: JSON.stringify(row.playerCards),
-        banker_cards: JSON.stringify(row.bankerCards),
-        player_point: String(row.playerPoint),
-        banker_point: String(row.bankerPoint),
-        winner: row.winner,
-        formulas: JSON.stringify(row.formulas),
-      }));
-      const eventRows = events.map(row => ({
-        event_name: row.eventName,
-        table_id: row.tableId,
-        round_no: String(row.roundNo),
-        點差: row.點差,
-        理數: row.理數,
-        導數: row.導數,
-        真數: row.真數,
-        HZ: row.HZ,
-        價值: row.價值,
-      }));
-      return { formulaCsv: `\uFEFF${csvContent(formulaColumns, formulaRows)}`, eventCsv: `\uFEFF${csvContent(eventColumns, eventRows)}`, formulaCount: formulaRows.length, eventCount: eventRows.length };
-    }),
-    importData: protectedProcedure.input(z.object({ type: z.enum(["formula", "event"]), csv: z.string().min(1).max(2_000_000) })).mutation(async ({ ctx, input }) => {
-      const rows = csvRows(input.csv);
-      let imported = 0;
-      let skipped = 0;
-      if (input.type === "formula") {
-        for (const row of rows) {
-          requireColumns(row, formulaColumns);
-          const tableId = row.table_id.trim().toUpperCase();
-          const roundNo = asNonNegativeInt(row.round_no, "round_no");
-          if (!tableId || roundNo < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "table_id 與 round_no 必須為有效值。" });
-          if (await db.getFormulaByRound(ctx.user.id, tableId, roundNo)) {
-            skipped += 1;
-            continue;
-          }
-          const playerCards = parseNumberCards(row.player_cards, "player_cards");
-          const bankerCards = parseNumberCards(row.banker_cards, "banker_cards");
-          await db.insertFormulaRecord({
-            userId: ctx.user.id,
-            tableId,
-            roundNo,
-            playerWins: asNonNegativeInt(row.player_wins, "player_wins"),
-            bankerWins: asNonNegativeInt(row.banker_wins, "banker_wins"),
-            tieCount: asNonNegativeInt(row.tie_count, "tie_count"),
-            playerCards,
-            bankerCards,
-            playerPoint: asNonNegativeInt(row.player_point, "player_point"),
-            bankerPoint: asNonNegativeInt(row.banker_point, "banker_point"),
-            winner: normalizePrediction(row.winner),
-            playerPair: isPair(playerCards),
-            bankerPair: isPair(bankerCards),
-            formulas: parseFormulas(row.formulas),
-          });
-          imported += 1;
-        }
-      } else {
-        for (const row of rows) {
-          requireColumns(row, eventColumns);
-          const tableId = row.table_id.trim().toUpperCase();
-          const eventName = row.event_name.trim();
-          const pattern = Object.fromEntries(EVENT_FORMULAS.map(name => [name, row[name].trim()])) as Record<(typeof EVENT_FORMULAS)[number], "閒" | "莊" | "和" | "">;
-          if (!tableId || !eventName || EVENT_FORMULAS.some(name => !pattern[name])) throw new TRPCError({ code: "BAD_REQUEST", message: "事件 CSV 的桌號、事件名稱與六項公式皆不得為空白。" });
-          if (await db.eventExists(ctx.user.id, eventName, pattern)) {
-            skipped += 1;
-            continue;
-          }
-          await db.insertEventRecord({ userId: ctx.user.id, eventName, tableId, roundNo: asNonNegativeInt(row.round_no, "round_no"), ...pattern });
-          imported += 1;
-        }
-      }
-      return { imported, skipped };
-    }),
+    exportData: protectedProcedure.query(({ ctx }) => exportCsvData(ctx.user.id)),
+    importData: protectedProcedure.input(z.object({ type: z.enum(["formula", "event"]), csv: z.string().min(1).max(2_000_000) })).mutation(({ ctx, input }) => importCsvData(ctx.user.id, input)),
   }),
 });
