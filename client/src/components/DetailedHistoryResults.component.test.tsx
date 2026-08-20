@@ -24,6 +24,8 @@ describe("示意圖相容的歷史資料表格", () => {
     expect(nextCell?.className).not.toContain("bg-[#F10B0B]");
     expect(within(table).getAllByText("A").length).toBeGreaterThan(0);
     expect(within(table).getAllByText("J").length).toBeGreaterThan(0);
-    expect(within(table).getAllByText("莊")[1]?.className).toContain("bg-[#F10B0B]");
+    expect(table.querySelector('[class*="bg-\\[\\#fff1f0\\]"]')).toBeTruthy();
+    expect(table.querySelector('[class*="bg-\\[\\#eff8ff\\]"]')).toBeTruthy();
+    expect(screen.getByTestId("historical-hit-row").className).toContain("bg-[#f2f4f7]");
   });
 });
